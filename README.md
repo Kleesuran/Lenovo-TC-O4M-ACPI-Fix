@@ -39,20 +39,31 @@ This repository contains the fixed DSDT table where the infinite `While` loop ha
 ### 🪟 Windows
 Since Windows does not natively support soft-patching ACPI tables during standard boot (unless Testsigning mode is enabled), you have two options:
 
-**Option 1: OpenCore Bootloader (Recommended / 推荐)**
-Use OpenCore to boot Windows. Place `dsdt.aml` into the `EFI/OC/ACPI` folder and enable it in your `config.plist`. OpenCore will seamlessly inject the patched BIOS table into Windows before the OS loads, allowing you to install GPU drivers normally without black screens.
-(使用 OpenCore 引导 Windows，将补丁放入 ACPI 目录即可在底层无缝修复，不影响日常使用和游戏反作弊软件)。
+**Option 1: GRUB ACPI Injection (Recommended / 强烈推荐)**
+GRUB bootloader has a built-in `acpi` module that can dynamically inject the patched DSDT into the EFI memory space just before handing off to the Windows Boot Manager. This makes Windows treat it as a native firmware table, completely avoiding Testsigning mode and keeping game anti-cheat systems fully functional.
+(利用 GRUB 引导器在启动 Windows 前底层注入 ACPI 补丁，Windows 会将其视为原生 BIOS 数据，无需开启测试模式，完美兼容所有游戏的反作弊系统)。
 
-**Option 2: Registry ASL Override (Testsigning Mode)**
-1. Install Windows *without* the GPU drivers (use Microsoft Basic Display Adapter). 断网安装 Windows。
-2. Download Microsoft's `asl.exe` compiler.
-3. Open an Administrator Command Prompt and load the table:
-   ```cmd
-   asl.exe /loadtable dsdt.aml
+1. Copy the compiled `dsdt.aml` to the root of your EFI partition (e.g., `/boot/dsdt.aml`).
+2. Edit `/etc/grub.d/40_custom` to add a new Windows entry with the `acpi` injection command:
+   ```bash
+   menuentry "Windows 10 (GRUB ACPI Inject)" --class windows --class os {
+       insmod part_gpt
+       insmod fat
+       insmod acpi
+       search --no-floppy --fs-uuid --set=root <Your-EFI-UUID>
+       acpi /dsdt.aml
+       chainloader /EFI/Microsoft/Boot/bootmgfw.efi
+   }
    ```
-4. Enable Windows Test Mode:
+3. Update GRUB (`sudo grub-mkconfig -o /boot/grub/grub.cfg`).
+4. Boot using this new menu entry, then install your GPU drivers normally!
+
+**Option 2: Windows Native Override (Testsigning Mode)**
+If you don't use GRUB, you can use Microsoft's developer ASL override mechanism.
+1. Copy the `dsdt.aml` into your Windows system directory as `C:\Windows\System32\acpitabl.dat`.
+2. Open an Administrator Command Prompt in Windows and enable Test Mode:
    ```cmd
    bcdedit /set testsigning on
    ```
-5. Reboot, and then install your GPU drivers.
-*(Note: Testsigning mode may trigger anti-cheat software in games like Valorant).*
+3. Reboot, and then install your GPU drivers.
+*(Note: Testsigning mode will trigger anti-cheat blocklists in games like Valorant, Apex, PUBG, etc. - Option 1 is highly recommended for gamers).*
